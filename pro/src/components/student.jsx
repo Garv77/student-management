@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { collection, addDoc } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import { collection, addDoc, setDoc, updateDoc, getDoc, increment, doc } from 'firebase/firestore';
 import { db } from '../utils/firebase'; // Ensure this path is correct
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const StudentForm = () => {
   // State to manage form inputs
+  const [iidentity, setIdentity] = useState();
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -17,6 +18,21 @@ const StudentForm = () => {
     dateOfBirth: '',
     feeAmount: '',
   });
+
+  const fetchGlobalIdentity = async () => {
+    const docRef = doc(db, "global", "eeMk5UXECvGrrCGRiyzR"); // Corrected this
+    const docSnap = await getDoc(docRef);
+  
+    if (docSnap.exists()) {
+      setIdentity(docSnap.data().identity);
+    } else {
+      console.error("No such document!");
+    }
+  };
+
+  useEffect(() => {
+    fetchGlobalIdentity();
+  }, []);
 
   // Handle input changes
   const handleInputChange = (e) => {
@@ -40,6 +56,7 @@ const StudentForm = () => {
         aadharNumber: formData.aadharNumber,
         dateOfBirth: formData.dateOfBirth,
         feeAmount: formData.feeAmount,
+        identity: iidentity, // Fixed typo
       });
 
       // Show success pop-up
@@ -50,7 +67,18 @@ const StudentForm = () => {
         closeOnClick: true,
         pauseOnHover: true,
         draggable: true,
-      });
+      }); 
+
+      // Update global identity
+      const globalRef = doc(db, 'global', 'eeMk5UXECvGrrCGRiyzR'); // Fixed reference
+      if (iidentity !== undefined) {
+          await updateDoc(globalRef, {
+            identity: increment(1),
+          });
+          setIdentity(iidentity + 1);
+      } else {
+          console.error("Identity value is undefined");
+      }
 
       // Clear the form
       setFormData({
@@ -64,6 +92,7 @@ const StudentForm = () => {
         dateOfBirth: '',
         feeAmount: '',
       });
+
     } catch (error) {
       // Show error pop-up
       toast.error('Error adding student. Please try again.', {
@@ -81,133 +110,32 @@ const StudentForm = () => {
   return (
     <div className="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-2xl font-bold text-blue-600 mb-6">Add a New Student</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Name</label>
-          <input
-            type="text"
-            name="name"
-            value={formData.name}
-            onChange={handleInputChange}
-            placeholder="Enter student's name"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Address */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Address</label>
-          <input
-            type="text"
-            name="address"
-            value={formData.address}
-            onChange={handleInputChange}
-            placeholder="Enter student's address"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Joining Date */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Joining Date</label>
-          <input
-            type="date"
-            name="joiningDate"
-            value={formData.joiningDate}
-            onChange={handleInputChange}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Mother's Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Mother's Name</label>
-          <input
-            type="text"
-            name="mothersName"
-            value={formData.mothersName}
-            onChange={handleInputChange}
-            placeholder="Enter mother's name"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Father's Name */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Father's Name</label>
-          <input
-            type="text"
-            name="fathersName"
-            value={formData.fathersName}
-            onChange={handleInputChange}
-            placeholder="Enter father's name"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Phone Number */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-          <input
-            type="tel"
-            name="phoneNumber"
-            value={formData.phoneNumber}
-            onChange={handleInputChange}
-            placeholder="Enter phone number"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Aadhar Number */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Aadhar Number</label>
-          <input
-            type="text"
-            name="aadharNumber"
-            value={formData.aadharNumber}
-            onChange={handleInputChange}
-            placeholder="Enter Aadhar number"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Date of Birth */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
-          <input
-            type="date"
-            name="dateOfBirth"
-            value={formData.dateOfBirth}
-            onChange={handleInputChange}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Fee Amount */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Fee Amount</label>
-          <input
-            type="number"
-            name="feeAmount"
-            value={formData.feeAmount}
-            onChange={handleInputChange}
-            placeholder="Enter fee amount"
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Submit Button */}
-        <div>
+      <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+        {[
+          { label: "Name", name: "name", type: "text", placeholder: "Enter student's name" },
+          { label: "Address", name: "address", type: "text", placeholder: "Enter student's address" },
+          { label: "Joining Date", name: "joiningDate", type: "date" },
+          { label: "Mother's Name", name: "mothersName", type: "text", placeholder: "Enter mother's name" },
+          { label: "Father's Name", name: "fathersName", type: "text", placeholder: "Enter father's name" },
+          { label: "Phone Number", name: "phoneNumber", type: "tel", placeholder: "Enter phone number" },
+          { label: "Aadhar Number", name: "aadharNumber", type: "text", placeholder: "Enter Aadhar number" },
+          { label: "Date of Birth", name: "dateOfBirth", type: "date" },
+          { label: "Fee Amount", name: "feeAmount", type: "number", placeholder: "Enter fee amount" },
+        ].map(({ label, name, type, placeholder }) => (
+          <div key={name}>
+            <label className="block text-sm font-medium text-gray-700">{label}</label>
+            <input
+              type={type}
+              name={name}
+              value={formData[name]}
+              onChange={handleInputChange}
+              placeholder={placeholder}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+        ))}
+        <div className="col-span-2">
           <button
             type="submit"
             className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -216,8 +144,6 @@ const StudentForm = () => {
           </button>
         </div>
       </form>
-
-      {/* Toast Container for Pop-up Notifications */}
       <ToastContainer />
     </div>
   );

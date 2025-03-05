@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, increment, onSnapshot, collection } from 'firebase/firestore';
+import { doc, updateDoc, increment, onSnapshot, collection, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '../utils/firebase'; // Ensure this path is correct
+import { toast } from 'react-toastify';
 
 const StudentList = () => {
   const [students, setStudents] = useState([]); // State to manage the list of students
@@ -12,7 +13,7 @@ const StudentList = () => {
   const [currentStudentId, setCurrentStudentId] = useState(null); // State to store the current student ID for payment
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1); // Current month (1-12)
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear()); // Current year
-
+  const [recievedFee, setRecievedFee] = useState(0);
   // Fetch students data in real-time from Firestore
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'students'), (snapshot) => {
@@ -30,26 +31,33 @@ const StudentList = () => {
   // Function to handle search
   useEffect(() => {
     if (searchQuery) {
-      const filtered = students.filter((student) =>
-        student.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredStudents(filtered);
+      if (isNaN(searchQuery)) {
+        const filtered = students.filter((student) =>
+          student.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setFilteredStudents(filtered);
+      } else {
+        const filtered = students.filter((student) =>
+          student.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        setFilteredStudents(filtered);
+      }
     } else {
       setFilteredStudents(students); // If no search query, show all students
     }
   }, [searchQuery, students]);
 
   // Function to calculate pending fees
-  const calculatePendingFees = (joiningDate, feePaidTimesCounter) => {
+  const calculatePendingFees = (joiningDate, feePaidTimesCounter, submittedfee, fee) => {
     const joiningDateObj = new Date(joiningDate);
     const joiningMonth = joiningDateObj.getMonth() + 1; // Months are 0-indexed in JavaScript
     const joiningYear = joiningDateObj.getFullYear();
 
     // Calculate the total number of months since joining
     const totalMonths = (currentYear - joiningYear) * 12 + (currentMonth - joiningMonth);
-
+    const remainingfees = fee - submittedfee;
     // Pending fees = total months since joining - feePaidTimesCounter
-    return Math.max(0, totalMonths - feePaidTimesCounter);
+    return remainingfees;
   };
 
   // Function to handle the Update button click
@@ -90,22 +98,66 @@ const StudentList = () => {
   };
 
   // Function to handle the payment confirmation
-  const handlePaymentConfirmation = async () => {
-    if (password === 'correctPassword') { // Replace 'correctPassword' with your actual password check logic
-      const studentRef = doc(db, 'students', currentStudentId);
-      await updateDoc(studentRef, {
-        feePaidTimesCounter: increment(1),
-      });
-      alert('Payment successful!');
+    const handlePaymentConfirmation = async () => {
+      if (password === 'correctPassword') { 
+        try{
+          setShowPayPopup(false);
+          toast.success('Payment successful!', {
+          position: 'top-right',
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+        });
+        // Replace 'correctPassword' with your actual password check logic
+        const studentRef = doc(db, 'students', currentStudentId);
+        await updateDoc(studentRef, {
+          feePaidTimesCounter: increment(1),
+          submittedfee: increment(recievedFee),
+        });
+         const docSnap = await getDoc(studentRef);
+        const docData = docSnap.data();
+
+        console.log("Adding document with data:", {
+          name: docData.name,
+          phoneNumber: docData.phoneNumber,
+          fee: recievedFee,
+          paidDate: new Date().toISOString(),
+        });
+
+        await addDoc(collection(db, 'fees'), {
+          name: docData.name,
+          phoneNumber: docData.phoneNumber,
+          fee: recievedFee,
+          paidDate: new Date().toISOString(),
+        });
+
+        setPassword('');
+        setRecievedFee(0);
+        setShowPayPopup(false);
+
+        
+
+        }catch(error){
+          toast.error('Error processing payment. Please try again.', {
+            position: 'top-right',
+            autoClose: 3000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+          });
+        }
+        
+      } else {
+        alert('Incorrect password!');
+      }
       setShowPayPopup(false);
-      setPassword('');
-    } else {
-      alert('Incorrect password!');
-    }
-  };
+    };
 
   return (
-    <div className="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md">
+    <div className="max-w-8xl mx-auto bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-2xl font-bold text-blue-600 mb-6">Student List</h2>
 
       {/* Search Bar */}
@@ -123,6 +175,7 @@ const StudentList = () => {
         <table className="min-w-full bg-white border border-gray-200">
           <thead>
             <tr className="bg-gray-100">
+              <th className="py-3 px-4 border-b text-left">ID</th>
               <th className="py-3 px-4 border-b text-left">Name</th>
               <th className="py-3 px-4 border-b text-left">Joining Date</th>
               <th className="py-3 px-4 border-b text-left">Fee Amount</th>
@@ -133,14 +186,17 @@ const StudentList = () => {
           <tbody>
             {filteredStudents.length > 0 ? (
               filteredStudents.map((student) => {
-                const pendingFees = calculatePendingFees(student.joiningDate, student.feePaidTimesCounter || 0);
+                const pendingFees = calculatePendingFees(student.joiningDate, student.feePaidTimesCounter || 0, student.submittedfee || 0, student.feeAmount);
                 return (
                   <React.Fragment key={student.id}>
                     <tr className="hover:bg-gray-50">
+                      <td className="py-3 px-4 border-b">{student.identity}</td>
                       <td className="py-3 px-4 border-b">{student.name}</td>
                       <td className="py-3 px-4 border-b">{student.joiningDate}</td>
                       <td className="py-3 px-4 border-b">{student.feeAmount || 0}</td>
-                      <td className="py-3 px-4 border-b">{pendingFees}</td>
+                      <td className={`py-3 px-4 border-b ${pendingFees > 0 ? "text-red-500" : "text-green-500"}`}>
+                        {pendingFees > 0 ? `Pending: ₹${pendingFees}` : "Paid"}
+                      </td>
                       <td className="py-3 px-4 border-b">
                         <div className="flex space-x-2">
                           <button
@@ -171,7 +227,7 @@ const StudentList = () => {
                           </button>
                           <div className="bg-gray-50 p-4 rounded-lg">
                             <h3 className="text-lg font-semibold mb-4">Update Student</h3>
-                            <form className="space-y-4" onSubmit={handleSaveChanges}>
+                            <form className="grid grid-cols-2 gap-4" onSubmit={handleSaveChanges}>
                               {/* Name */}
                               <div>
                                 <label className="block text-sm font-medium text-gray-700">Name</label>
@@ -179,7 +235,7 @@ const StudentList = () => {
                                   type="text"
                                   name="name"
                                   defaultValue={selectedStudent.name}
-                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
 
@@ -190,7 +246,7 @@ const StudentList = () => {
                                   type="text"
                                   name="address"
                                   defaultValue={selectedStudent.address}
-                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
 
@@ -201,7 +257,7 @@ const StudentList = () => {
                                   type="date"
                                   name="joiningDate"
                                   defaultValue={selectedStudent.joiningDate}
-                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
 
@@ -212,7 +268,7 @@ const StudentList = () => {
                                   type="text"
                                   name="mothersName"
                                   defaultValue={selectedStudent.mothersName}
-                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
 
@@ -223,7 +279,7 @@ const StudentList = () => {
                                   type="text"
                                   name="fathersName"
                                   defaultValue={selectedStudent.fathersName}
-                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
 
@@ -234,7 +290,7 @@ const StudentList = () => {
                                   type="tel"
                                   name="phoneNumber"
                                   defaultValue={selectedStudent.phoneNumber}
-                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
 
@@ -245,7 +301,7 @@ const StudentList = () => {
                                   type="text"
                                   name="aadharNumber"
                                   defaultValue={selectedStudent.aadharNumber}
-                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
 
@@ -256,7 +312,7 @@ const StudentList = () => {
                                   type="date"
                                   name="dateOfBirth"
                                   defaultValue={selectedStudent.dateOfBirth}
-                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
 
@@ -267,15 +323,15 @@ const StudentList = () => {
                                   type="number"
                                   name="feeAmount"
                                   defaultValue={selectedStudent.feeAmount}
-                                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-3 py-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                               </div>
 
-                              {/* Submit Button */}
-                              <div>
+                              {/* Submit Button (Full Width) */}
+                              <div className="col-span-2">
                                 <button
                                   type="submit"
-                                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 >
                                   Save Changes
                                 </button>
@@ -285,6 +341,7 @@ const StudentList = () => {
                         </td>
                       </tr>
                     )}
+
                   </React.Fragment>
                 );
               })
@@ -311,6 +368,13 @@ const StudentList = () => {
               onChange={(e) => setPassword(e.target.value)}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter Password"
+            />
+            <p className="mb-4">Please enter the amount of payment for the student.</p>
+            <input
+              type="number"
+              onChange={(e) => setRecievedFee(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter amount"
             />
             <div className="mt-4 flex justify-end space-x-2">
               <button

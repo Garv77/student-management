@@ -4,7 +4,7 @@ import { db } from './utils/firebase'; // Ensure this path is correct
 import ResponsiveNavbar from './components/navbar';
 import Student from './components/student';
 import StudentList from './components/list';
-
+import Dashboard from './components/dashboard';
 
 const App = () => {
   const searchref = useRef();
@@ -74,12 +74,12 @@ const App = () => {
       </header>
 
       {/* Search Box */}
-      {/* <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20">
-        <SearchBox onSearch={handleSearch} />
-      </div> */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20">
+        <Dashboard/>
+      </div>
 
       {/* Student List */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-15" ref={searchref}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-1 mt-1" ref={searchref}>
         {loading ? (
           <div className="text-center text-gray-500">Loading...</div>
         ) : (
